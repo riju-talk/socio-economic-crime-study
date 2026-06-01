@@ -2,68 +2,66 @@
 Boundary Feature Engineering Module
 
 Implements formulas for computing socio-economic boundary features
-for crime analysis at census tract level.
+for crime analysis at Delhi ward level.
 """
 
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def compute_boundary_sharpness(
     gdf: gpd.GeoDataFrame,
     adjacency_dict: Dict[str, List[str]],
-    income_col: str = 'median_income'
+    feature_col: str = 'literacy_rate'
 ) -> pd.Series:
     """
-    Compute boundary sharpness for each tract.
+    Compute boundary sharpness for each ward.
     
     Formula:
-    BoundarySharpness_i = |Inc_i - (1/|N(i)|) * sum(Inc_j for j in N(i))|
+    BoundarySharpness_i = max(|X_i - X_j| for j in N(i))
     
     Interpretation:
-    High → tract sits next to very different neighborhoods
-    Low → tract embedded in similar-income area
+    High → ward sits next to very different neighborhoods
+    Low → ward embedded in similar area
     
     Parameters
     ----------
     gdf : GeoDataFrame
-        Census tract data with income column
+        Ward data with feature column
     adjacency_dict : dict
-        Mapping of tract_id -> list of neighbor tract_ids
-    income_col : str
-        Name of median income column
+        Mapping of ward_id -> list of neighbor ward_ids
+    feature_col : str
+        Name of feature column (e.g., literacy_rate, median_income)
         
     Returns
     -------
     pd.Series
-        Boundary sharpness values indexed by tract_id
+        Boundary sharpness values indexed by ward_id
     """
     boundary_sharpness = {}
     
-    for tract_id, neighbors in adjacency_dict.items():
-        if tract_id not in gdf.index or len(neighbors) == 0:
-            boundary_sharpness[tract_id] = np.nan
+    for ward_id, neighbors in adjacency_dict.items():
+        if ward_id not in gdf.index or len(neighbors) == 0:
+            boundary_sharpness[ward_id] = np.nan
             continue
-            
-        tract_income = gdf.loc[tract_id, income_col]
         
-        # Get neighbor incomes
-        neighbor_incomes = gdf.loc[
+        ward_value = gdf.loc[ward_id, feature_col]
+        
+        # Get neighbor values
+        neighbor_values = gdf.loc[
             gdf.index.isin(neighbors), 
-            income_col
+            feature_col
         ].dropna()
         
-        if len(neighbor_incomes) == 0:
-            boundary_sharpness[tract_id] = np.nan
+        if len(neighbor_values) == 0:
+            boundary_sharpness[ward_id] = np.nan
             continue
-            
-        # Compute mean neighbor income
-        mean_neighbor_income = neighbor_incomes.mean()
         
-        # Absolute difference
-        boundary_sharpness[tract_id] = abs(tract_income - mean_neighbor_income)
+        # Maximum absolute difference to any neighbor
+        diffs = abs(neighbor_values - ward_value)
+        boundary_sharpness[ward_id] = diffs.max()
     
     return pd.Series(boundary_sharpness)
 
@@ -85,25 +83,25 @@ def compute_max_income_gap(
     Parameters
     ----------
     gdf : GeoDataFrame
-        Census tract data with income column
+        Ward data with income column
     adjacency_dict : dict
-        Mapping of tract_id -> list of neighbor tract_ids
+        Mapping of ward_id -> list of neighbor ward_ids
     income_col : str
         Name of median income column
         
     Returns
     -------
     pd.Series
-        Max income gap values indexed by tract_id
+        Max income gap values indexed by ward_id
     """
     max_gaps = {}
     
-    for tract_id, neighbors in adjacency_dict.items():
-        if tract_id not in gdf.index or len(neighbors) == 0:
-            max_gaps[tract_id] = np.nan
+    for ward_id, neighbors in adjacency_dict.items():
+        if ward_id not in gdf.index or len(neighbors) == 0:
+            max_gaps[ward_id] = np.nan
             continue
-            
-        tract_income = gdf.loc[tract_id, income_col]
+        
+        ward_income = gdf.loc[ward_id, income_col]
         
         # Get neighbor incomes
         neighbor_incomes = gdf.loc[
@@ -112,64 +110,64 @@ def compute_max_income_gap(
         ].dropna()
         
         if len(neighbor_incomes) == 0:
-            max_gaps[tract_id] = np.nan
+            max_gaps[ward_id] = np.nan
             continue
-            
+        
         # Compute max absolute difference
-        gaps = abs(neighbor_incomes - tract_income)
-        max_gaps[tract_id] = gaps.max()
+        gaps = abs(neighbor_incomes - ward_income)
+        max_gaps[ward_id] = gaps.max()
     
     return pd.Series(max_gaps)
 
 
-def compute_neighbor_income_std(
+def compute_neighbor_feature_std(
     gdf: gpd.GeoDataFrame,
     adjacency_dict: Dict[str, List[str]],
-    income_col: str = 'median_income'
+    feature_col: str = 'median_income'
 ) -> pd.Series:
     """
-    Compute standard deviation of neighbor incomes.
+    Compute standard deviation of neighbor feature values.
     
     Formula:
-    NeighborIncomeStd_i = sqrt((1/|N(i)|) * sum((Inc_j - mean(Inc_N))^2))
+    NeighborStd_i = sqrt((1/|N(i)|) * sum((X_j - mean(X_N))^2))
     
     Interpretation:
-    High → tract surrounded by diverse-income neighbors
-    Low → surrounded by uniform-income neighbors
+    High → ward surrounded by diverse neighbors
+    Low → surrounded by uniform neighbors
     
     Parameters
     ----------
     gdf : GeoDataFrame
-        Census tract data with income column
+        Ward data with feature column
     adjacency_dict : dict
-        Mapping of tract_id -> list of neighbor tract_ids
-    income_col : str
-        Name of median income column
+        Mapping of ward_id -> list of neighbor ward_ids
+    feature_col : str
+        Name of feature column
         
     Returns
     -------
     pd.Series
-        Neighbor income std values indexed by tract_id
+        Neighbor feature std values indexed by ward_id
     """
     neighbor_stds = {}
     
-    for tract_id, neighbors in adjacency_dict.items():
-        if tract_id not in gdf.index or len(neighbors) == 0:
-            neighbor_stds[tract_id] = np.nan
+    for ward_id, neighbors in adjacency_dict.items():
+        if ward_id not in gdf.index or len(neighbors) == 0:
+            neighbor_stds[ward_id] = np.nan
             continue
-            
-        # Get neighbor incomes
-        neighbor_incomes = gdf.loc[
+        
+        # Get neighbor values
+        neighbor_values = gdf.loc[
             gdf.index.isin(neighbors), 
-            income_col
+            feature_col
         ].dropna()
         
-        if len(neighbor_incomes) < 2:
-            neighbor_stds[tract_id] = 0.0
+        if len(neighbor_values) < 2:
+            neighbor_stds[ward_id] = 0.0
             continue
-            
+        
         # Compute standard deviation
-        neighbor_stds[tract_id] = neighbor_incomes.std()
+        neighbor_stds[ward_id] = neighbor_values.std()
     
     return pd.Series(neighbor_stds)
 
@@ -186,31 +184,31 @@ def compute_income_gradient(
     IncomeGradient_i = (1/|N(i)|) * sum(Inc_j - Inc_i for j in N(i))
     
     Interpretation:
-    Positive → tract poorer than neighbors
-    Negative → tract richer than neighbors
+    Positive → ward poorer than neighbors
+    Negative → ward richer than neighbors
     
     Parameters
     ----------
     gdf : GeoDataFrame
-        Census tract data with income column
+        Ward data with income column
     adjacency_dict : dict
-        Mapping of tract_id -> list of neighbor tract_ids
+        Mapping of ward_id -> list of neighbor ward_ids
     income_col : str
         Name of median income column
         
     Returns
     -------
     pd.Series
-        Income gradient values indexed by tract_id
+        Income gradient values indexed by ward_id
     """
     gradients = {}
     
-    for tract_id, neighbors in adjacency_dict.items():
-        if tract_id not in gdf.index or len(neighbors) == 0:
-            gradients[tract_id] = np.nan
+    for ward_id, neighbors in adjacency_dict.items():
+        if ward_id not in gdf.index or len(neighbors) == 0:
+            gradients[ward_id] = np.nan
             continue
-            
-        tract_income = gdf.loc[tract_id, income_col]
+        
+        ward_income = gdf.loc[ward_id, income_col]
         
         # Get neighbor incomes
         neighbor_incomes = gdf.loc[
@@ -219,11 +217,11 @@ def compute_income_gradient(
         ].dropna()
         
         if len(neighbor_incomes) == 0:
-            gradients[tract_id] = np.nan
+            gradients[ward_id] = np.nan
             continue
-            
+        
         # Mean difference
-        gradients[tract_id] = (neighbor_incomes - tract_income).mean()
+        gradients[ward_id] = (neighbor_incomes - ward_income).mean()
     
     return pd.Series(gradients)
 
@@ -245,24 +243,24 @@ def compute_spatially_lagged_crime(
     Parameters
     ----------
     gdf : GeoDataFrame
-        Census tract data with crime rate column
+        Ward data with crime rate column
     adjacency_dict : dict
-        Mapping of tract_id -> list of neighbor tract_ids
+        Mapping of ward_id -> list of neighbor ward_ids
     crime_col : str
         Name of crime rate column
         
     Returns
     -------
     pd.Series
-        Spatially lagged crime rates indexed by tract_id
+        Spatially lagged crime rates indexed by ward_id
     """
     lagged_crime = {}
     
-    for tract_id, neighbors in adjacency_dict.items():
-        if tract_id not in gdf.index or len(neighbors) == 0:
-            lagged_crime[tract_id] = np.nan
+    for ward_id, neighbors in adjacency_dict.items():
+        if ward_id not in gdf.index or len(neighbors) == 0:
+            lagged_crime[ward_id] = np.nan
             continue
-            
+        
         # Get neighbor crime rates
         neighbor_crimes = gdf.loc[
             gdf.index.isin(neighbors), 
@@ -270,56 +268,147 @@ def compute_spatially_lagged_crime(
         ].dropna()
         
         if len(neighbor_crimes) == 0:
-            lagged_crime[tract_id] = np.nan
+            lagged_crime[ward_id] = np.nan
             continue
-            
+        
         # Mean neighbor crime rate
-        lagged_crime[tract_id] = neighbor_crimes.mean()
+        lagged_crime[ward_id] = neighbor_crimes.mean()
     
     return pd.Series(lagged_crime)
+
+
+class BoundaryFeatureEngineer:
+    """
+    Comprehensive boundary feature engineering class.
+    
+    Computes all boundary-aware features in a unified interface.
+    """
+    
+    def __init__(
+        self,
+        income_col: str = 'median_income',
+        literacy_col: str = 'literacy_rate',
+        crime_col: str = 'crime_rate',
+        slum_col: str = 'slum_percentage'
+    ):
+        self.income_col = income_col
+        self.literacy_col = literacy_col
+        self.crime_col = crime_col
+        self.slum_col = slum_col
+    
+    def fit_transform(
+        self,
+        gdf: gpd.GeoDataFrame,
+        adjacency_dict: Dict[str, List[str]]
+    ) -> gpd.GeoDataFrame:
+        """
+        Compute all boundary features.
+        
+        Parameters
+        ----------
+        gdf : GeoDataFrame
+            Ward data with required columns
+        adjacency_dict : dict
+            Mapping of ward_id -> list of neighbor ward_ids
+            
+        Returns
+        -------
+        GeoDataFrame
+            Input GeoDataFrame with added boundary feature columns
+        """
+        result = gdf.copy()
+        
+        # Literacy boundary sharpness
+        result['boundary_sharpness_literacy'] = compute_boundary_sharpness(
+            gdf, adjacency_dict, self.literacy_col
+        )
+        
+        # Income boundary sharpness
+        result['boundary_sharpness_income'] = compute_boundary_sharpness(
+            gdf, adjacency_dict, self.income_col
+        )
+        
+        # Slum percentage boundary sharpness
+        result['boundary_sharpness_slum'] = compute_boundary_sharpness(
+            gdf, adjacency_dict, self.slum_col
+        )
+        
+        # Max income gap
+        result['max_income_gap'] = compute_max_income_gap(
+            gdf, adjacency_dict, self.income_col
+        )
+        
+        # Neighbor income std
+        result['neighbor_income_std'] = compute_neighbor_feature_std(
+            gdf, adjacency_dict, self.income_col
+        )
+        
+        # Income gradient
+        result['income_gradient'] = compute_income_gradient(
+            gdf, adjacency_dict, self.income_col
+        )
+        
+        # Spatially lagged crime
+        result['lagged_crime'] = compute_spatially_lagged_crime(
+            gdf, adjacency_dict, self.crime_col
+        )
+        
+        # Composite boundary index (average of normalized sharpness measures)
+        sharpness_cols = [
+            'boundary_sharpness_literacy',
+            'boundary_sharpness_income',
+            'boundary_sharpness_slum'
+        ]
+        
+        # Normalize each sharpness measure
+        normalized = []
+        for col in sharpness_cols:
+            mean_val = result[col].mean()
+            std_val = result[col].std()
+            if std_val > 0:
+                normalized.append((result[col] - mean_val) / std_val)
+        
+        if len(normalized) > 0:
+            result['boundary_index'] = pd.DataFrame(normalized).T.mean(axis=1)
+        
+        return result
 
 
 def compute_all_boundary_features(
     gdf: gpd.GeoDataFrame,
     adjacency_dict: Dict[str, List[str]],
     income_col: str = 'median_income',
-    crime_col: str = 'crime_rate'
+    literacy_col: str = 'literacy_rate',
+    crime_col: str = 'crime_rate',
+    slum_col: str = 'slum_percentage'
 ) -> gpd.GeoDataFrame:
     """
-    Compute all boundary features at once.
+    Convenience function to compute all boundary features at once.
     
     Parameters
     ----------
     gdf : GeoDataFrame
-        Census tract data with income and crime columns
+        Ward data with required columns
     adjacency_dict : dict
-        Mapping of tract_id -> list of neighbor tract_ids
+        Mapping of ward_id -> list of neighbor ward_ids
     income_col : str
         Name of median income column
+    literacy_col : str
+        Name of literacy rate column
     crime_col : str
         Name of crime rate column
+    slum_col : str
+        Name of slum percentage column
         
     Returns
     -------
     GeoDataFrame
         Input GeoDataFrame with added boundary feature columns
     """
-    result = gdf.copy()
-    
-    result['boundary_sharpness'] = compute_boundary_sharpness(
-        gdf, adjacency_dict, income_col
+    engineer = BoundaryFeatureEngineer(
+        income_col=income_col,
+        literacy_col=literacy_col,
+        crime_col=crime_col,
+        slum_col=slum_col
     )
-    result['max_income_gap'] = compute_max_income_gap(
-        gdf, adjacency_dict, income_col
-    )
-    result['neighbor_income_std'] = compute_neighbor_income_std(
-        gdf, adjacency_dict, income_col
-    )
-    result['income_gradient'] = compute_income_gradient(
-        gdf, adjacency_dict, income_col
-    )
-    result['lagged_crime'] = compute_spatially_lagged_crime(
-        gdf, adjacency_dict, crime_col
-    )
-    
-    return result
+    return engineer.fit_transform(gdf, adjacency_dict)
