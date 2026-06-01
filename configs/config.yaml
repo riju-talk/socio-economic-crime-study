@@ -1,0 +1,213 @@
+# Configuration for Delhi Crime Boundaries Project
+
+# =============================================================================
+# PATHS
+# =============================================================================
+paths:
+  raw_data: "data/raw"
+  interim_data: "data/interim"
+  processed_data: "data/processed"
+  models: "models"
+  reports: "reports"
+  figures: "reports/figures"
+  policy: "reports/policy"
+
+# Data sources
+data_sources:
+  ncrb_crime: "data/raw/ncrb_crime_delhi.csv"
+  census_2011: "data/raw/census_2011_wards.csv"
+  ward_shapefile: "data/raw/delhi_wards.shp"
+  nfhs5: "data/raw/nfhs5_district.csv"
+  poi_data: "data/raw/osm_poi.csv"
+  night_lights: "data/raw/viirs_nightlights.tif"
+
+# =============================================================================
+# SPATIAL SETTINGS
+# =============================================================================
+spatial:
+  crs: "EPSG:4326"  # WGS84
+  projected_crs: "EPSG:24364"  # UTM Zone 44N for Delhi
+  contiguity: "queen"  # queen or rook
+  min_neighbors: 1
+
+# =============================================================================
+# TEMPORAL SETTINGS
+# =============================================================================
+temporal:
+  train_start_year: 2016
+  train_end_year: 2022
+  test_start_year: 2023
+  test_end_year: 2024
+  seq_length: 7  # For LSTM: 7 years lookback
+  forecast_horizon: 1  # Predict next year
+
+# =============================================================================
+# FEATURE ENGINEERING
+# =============================================================================
+features:
+  # Boundary features
+  boundary_sharpness_cols:
+    - "literacy_rate"
+    - "median_income"
+    - "slum_percentage"
+  
+  # Socio-economic controls
+  control_features:
+    - "population_density"
+    - "literacy_rate"
+    - "median_income"
+    - "unemployment_rate"
+    - "slum_percentage"
+    - "worker_classification"
+  
+  # Built environment
+  poi_categories:
+    - "bank"
+    - "hospital"
+    - "market"
+    - "police_station"
+    - "school"
+    - "metro_station"
+  
+  # Temporal features
+  include_moving_avg: true
+  moving_avg_window: 3
+  include_yoy_change: true
+  include_seasonal: false  # Annual data, no seasonality
+
+# =============================================================================
+# MODEL HYPERPARAMETERS
+# =============================================================================
+models:
+  # Negative Binomial
+  negative_binomial:
+    method: "bfgs"
+    maxiter: 100
+    disp: false
+  
+  # XGBoost
+  xgboost:
+    objective: "count:poisson"
+    eval_metric: "mae"
+    max_depth: 6
+    learning_rate: 0.1
+    n_estimators: 100
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+  
+  # LSTM
+  lstm:
+    input_size: null  # Set dynamically based on features
+    hidden_size: 64
+    num_layers: 2
+    dropout: 0.2
+    bidirectional: false
+    batch_size: 32
+    epochs: 100
+    learning_rate: 0.001
+    early_stopping_patience: 10
+  
+  # STGCN (Graph Neural Network)
+  stgcn:
+    in_channels: null  # Set dynamically
+    hidden_channels: [64, 64]
+    out_channels: 1
+    kernel_size: 3
+    temporal_conv_channels: 64
+    graph_conv_type: "chebnet"
+    cheb_k: 2
+    dropout: 0.3
+    batch_size: 16
+    epochs: 150
+    learning_rate: 0.001
+    weight_decay: 0.0001
+
+# =============================================================================
+# CROSS-VALIDATION
+# =============================================================================
+cv:
+  n_splits: 5
+  spatial_clustering: true
+  cluster_method: "kmeans"  # kmeans or spectral
+  n_clusters: 10
+  random_state: 42
+
+# =============================================================================
+# EVALUATION METRICS
+# =============================================================================
+metrics:
+  point_forecast:
+    - "mae"
+    - "rmse"
+    - "mape"
+  probabilistic:
+    - "crps"
+    - "coverage_90"
+  spatial:
+    - "morans_i_residuals"
+  fairness:
+    - "disparate_impact_ratio"
+    - "error_rate_by_group"
+
+# =============================================================================
+# FAIRNESS & ETHICS
+# =============================================================================
+fairness:
+  sensitive_features:
+    - "income_quintile"
+    - "sc_st_pct"  # Scheduled Caste/Tribe percentage
+  disparate_impact_threshold: 0.8
+  counterfactual_delta: 0.2  # 20% change for counterfactual testing
+
+# =============================================================================
+# UNCERTAINTY QUANTIFICATION
+# =============================================================================
+uncertainty:
+  method: "monte_carlo_dropout"
+  n_samples: 100
+  confidence_levels:
+    - 0.80
+    - 0.90
+    - 0.95
+
+# =============================================================================
+# MLFLOW TRACKING
+# =============================================================================
+mlflow:
+  experiment_name: "delhi-crime-boundaries"
+  tracking_uri: null  # Use default local
+  log_artifacts: true
+  log_models: true
+
+# =============================================================================
+# DVC SETTINGS
+# =============================================================================
+dvc:
+  remote: null  # Configure as needed
+  cache_dir: ".dvc/cache"
+
+# =============================================================================
+# GENERAL SETTINGS
+# =============================================================================
+general:
+  random_seed: 42
+  n_jobs: -1
+  verbose: true
+  min_population: 100  # Exclude wards with population < 100
+  
+  # Crime categories to include (NCRB classification)
+  violent_crimes:
+    - "Murder"
+    - "Rape"
+    - "Kidnapping & Abduction"
+    - "Dacoity"
+    - "Robbery"
+    - "Arson"
+    - "Hurt"
+  
+  property_crimes:
+    - "Burglary"
+    - "Theft"
+    - "Motor Vehicle Theft"
+    - "Criminal Breach of Trust"

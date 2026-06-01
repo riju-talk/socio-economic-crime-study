@@ -1,13 +1,67 @@
-pandas>=1.5.0
-numpy>=1.23.0
-geopandas>=0.12.0
-matplotlib>=3.6.0
-seaborn>=0.12.0
+# Core Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=14.0.0
+fastparquet>=2023.4.0
+
+# Geospatial
+geopandas>=0.14.0
 shapely>=2.0.0
-statsmodels>=0.14.0
-scikit-learn>=1.2.0
-pysal>=2.7.0
-libpysal>=4.7.0
+fiona>=1.9.0
+pyproj>=3.6.0
+mapclassify>=2.6.0
+
+# Spatial Statistics
+pysal>=23.0.0
+libpysal>=4.8.0
 esda>=2.5.0
-jupyter>=1.0.0
-notebook>=6.5.0
+spreg>=1.7.0
+mgwr>=2.2.0
+
+# Machine Learning
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+lightgbm>=4.0.0
+
+# Deep Learning
+torch>=2.1.0
+torch-geometric>=2.4.0
+torch-geometric-temporal>=0.57.0
+tensorflow>=2.15.0
+
+# Traditional Stats
+statsmodels>=0.14.0
+scipy>=1.11.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
+folium>=0.15.0
+contextily>=1.4.0
+
+# Interpretability
+shap>=0.44.0
+lime>=0.2.0
+
+# Experiment Tracking
+mlflow>=2.9.0
+dvc>=3.30.0
+
+# Dashboard
+streamlit>=1.29.0
+
+# Development
+jupyterlab>=4.0.0
+notebook>=7.0.0
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.11.0
+flake8>=6.1.0
+mypy>=1.7.0
+
+# Utilities
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+joblib>=1.3.0
